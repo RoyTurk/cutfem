@@ -23,9 +23,9 @@ n_cells_list = [8, 16, 32, 64, 128, 256, 512]
 
 # Parameter configurations
 configs = [
-    dict(gamma_mu=10, gamma_g=0.0),
-    dict(gamma_mu=10, gamma_g=1.0),
-    dict(gamma_mu=0.0, gamma_g=1.0),
+    dict(gamma_mu=10.0, gamma_g=0.0),
+    dict(gamma_mu=10.0, gamma_g=0.1),
+    dict(gamma_mu=0.0, gamma_g=0.1),
 ]
 
 def run_config(gamma_mu, gamma_g):

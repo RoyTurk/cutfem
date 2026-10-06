@@ -3,6 +3,7 @@ poisson_problem.py
 Core module for the Poisson equation solver
 """
 
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -11,7 +12,6 @@ from mpi4py import MPI
 import basix.ufl
 import dolfinx.fem
 import dolfinx.fem.petsc
-import dolfinx.mesh
 import numpy as np
 import ufl
 from dolfinx import default_scalar_type as dtype
@@ -22,6 +22,9 @@ import qugar.impl
 import qugar.dolfinx
 from qugar.dolfinx import dsu, UnfittedNormal
 from qugar.mesh import create_unfitted_impl_Cartesian_mesh
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from cutfem_utils import ghost_facet_measure
 
 
 @dataclass
@@ -53,34 +56,6 @@ def exact_solution(x):
     u = sin(pi * x) * sin(pi * y)
     """
     return ufl.sin(np.pi * x[0]) * ufl.sin(np.pi * x[1])
-
-
-def _ghost_facet_measure(unf_mesh, cut_cells):
-    """
-    Build a ds measure restricted to interior facets of cut elements.
-    These are the facets over which the ghost penalty acts.
-    Returns (ds_ghost, n_int)
-    """
-    cut_cell_set = set(cut_cells.tolist())
-    tdim = unf_mesh.topology.dim
-    fdim = tdim - 1
-    unf_mesh.topology.create_connectivity(fdim, tdim)
-    f2c = unf_mesh.topology.connectivity(fdim, tdim)
- 
-    cut_facet_ids = np.array(
-        [f for f in range(f2c.num_nodes)
-         if len(f2c.links(f)) == 2
-         and cut_cell_set.intersection(f2c.links(f).tolist())],
-         dtype=np.int32,
-    )
-    cut_facet_tags = dolfinx.mesh.meshtags(
-        unf_mesh, fdim, cut_facet_ids,
-        np.ones(len(cut_facet_ids), dtype=np.int32),
-    )
-    ds_ghost = ufl.Measure("dS", domain=unf_mesh,
-                         subdomain_data=cut_facet_tags, subdomain_id=1)
-    n_int = ufl.FacetNormal(unf_mesh)
-    return ds_ghost, n_int
 
 
 def build_system(
@@ -151,12 +126,6 @@ def build_system(
     a -= u * gradv_n * ds_unf
     a += (beta / h) * u * v * ds_unf
 
-    # Ghost penatly
-    if tau != 0.0:
-        cut_cells = unf_mesh.get_cut_cells()
-        ds_ghost, n_int = _ghost_facet_measure(unf_mesh, cut_cells)
-        a += (tau * h) * ufl.jump(ufl.grad(u), n_int) * ufl.jump(ufl.grad(v), n_int) * ds_ghost
-
     # Linear functional
     L = f * v * dx
     L += (beta / h) * u_ex * v * ds_unf
@@ -168,6 +137,18 @@ def build_system(
 
     b = dolfinx.fem.petsc.assemble_vector(dolfinx.fem.form(L))
     b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
+
+    # Ghost penatly
+    if tau != 0.0:
+        cut_cells = unf_mesh.get_cut_cells()
+        ds_ghost, n_int = ghost_facet_measure(unf_mesh, cut_cells)
+        a_ghost = (tau * h) * ufl.jump(ufl.grad(u), n_int) * ufl.jump(ufl.grad(v), n_int) * ds_ghost
+
+        G = dolfinx.fem.petsc.assemble_matrix(dolfinx.fem.form.__wrapped__(a_ghost))
+        G.assemble()
+
+        A.axpy(1.0, G, structure=PETSc.Mat.Structure.DIFFERENT_NONZERO_PATTERN)
+        G.destroy()
 
     return SystemData(
         A=A,

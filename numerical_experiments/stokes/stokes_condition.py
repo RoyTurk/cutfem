@@ -20,18 +20,21 @@ from qugar.mesh import create_unfitted_impl_Cartesian_mesh
 from stokes_problem import build_system, compute_condition
 
 # Parameters
-radius = 0.40
+radius = 0.5
 mu = 1.0
 gamma_mu = 10.0
 gamma_p = 0.0
 center = np.array([0.0, 0.0])
 
+xmin = np.array([-1.0, -1.0])
+xmax = np.array([1.0, 1.0])
+
 gamma_g_values = [0.0, 0.1, 1.0, 10.0]
 n_cells_values = [8, 16, 32, 64]
 
 # Same background domain as build_system defaults
-xmin = np.array([-1.0, -1.0], dtype=dtype)
-xmax = np.array([1.0, 1.0], dtype=dtype)
+# xmin = np.array([-1.0, -1.0], dtype=dtype)
+# xmax = np.array([1.0, 1.0], dtype=dtype)
 
 # Mesh check: show cut / full cells for each mesh before the sweep
 def cell_bbox(mesh, cell_idx):

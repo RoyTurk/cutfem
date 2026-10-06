@@ -17,6 +17,9 @@ gamma_mu = 10
 gamma_p = 0.0
 n_cells = 32
 
+xmin = np.array([-1.243, -1.243])
+xmax = np.array([1.243, 1.243])
+
 gamma_g_values = [0.0, 0.1, 1.0]
 
 n_sweep = 41
@@ -51,6 +54,8 @@ for gg in gamma_g_values:
             gamma_g  = gg,
             gamma_p  = gamma_p,
             radius   = radius,
+            xmin     = xmin,
+            xmax     = xmax,
             mu       = mu,
             v_degree = 2,
             p_degree = 1,
