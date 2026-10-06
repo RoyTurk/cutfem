@@ -1,0 +1,62 @@
+# Thesis figure style.
+#
+# Figures are created at their final printed size (see cutfem.plotting.figure),
+# so they are included in LaTeX WITHOUT scaling and their fonts match the text:
+#     \includegraphics{figures/poisson/convergence.pdf}
+
+# Layout and output
+figure.constrained_layout.use: True
+figure.dpi: 150
+savefig.dpi: 300
+savefig.format: pdf
+pdf.fonttype: 42
+
+# Fonts: Computer Modern, as in LaTeX (no TeX installation needed)
+font.family: serif
+font.serif: cmr10, Computer Modern Roman, DejaVu Serif
+mathtext.fontset: cm
+axes.formatter.use_mathtext: True
+font.size: 10
+axes.labelsize: 10
+axes.titlesize: 10
+legend.fontsize: 9
+xtick.labelsize: 9
+ytick.labelsize: 9
+
+# Ink: near-black text and frame, recessive grid
+text.color: 1a1a1a
+axes.labelcolor: 1a1a1a
+axes.edgecolor: 1a1a1a
+xtick.color: 1a1a1a
+ytick.color: 1a1a1a
+axes.linewidth: 0.6
+axes.grid: True
+axes.grid.which: major
+axes.axisbelow: True
+grid.color: b8b8b8
+grid.linewidth: 0.4
+grid.alpha: 0.5
+
+# Ticks
+xtick.direction: in
+ytick.direction: in
+xtick.major.width: 0.6
+ytick.major.width: 0.6
+xtick.minor.width: 0.4
+ytick.minor.width: 0.4
+xtick.major.size: 3
+ytick.major.size: 3
+xtick.minor.size: 1.5
+ytick.minor.size: 1.5
+
+# Marks
+lines.linewidth: 1.2
+lines.markersize: 4
+lines.markeredgewidth: 0.8
+axes.prop_cycle: cycler(color=["6a4bb0", "0f9a95", "c97a1a", "c2456b"])
+
+# Legend: frameless
+legend.frameon: False
+legend.handlelength: 1.8
+legend.columnspacing: 1.2
+legend.borderaxespad: 0.3
