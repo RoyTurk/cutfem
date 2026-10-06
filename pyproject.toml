@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cutfem"
+version = "0.1.0"
+description = "CutFEM numerical experiments (Poisson, Stokes, advection-diffusion, Navier-Stokes)"
+requires-python = ">=3.10"
+# dolfinx, qugar, petsc4py, numpy, scipy and matplotlib come from the conda
+# environment (qugar-env); they are not listed here so pip never touches them.
+dependencies = []
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+cutfem = ["*.mplstyle"]
+
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "N", "D", "B", "UP", "NPY"]
+ignore = [
+    "N802", "N803", "N806", "N815", "N816",  # mathematical names (A, L2_u, Q_el)
+    "D105", "D107",                          # magic methods / __init__
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
