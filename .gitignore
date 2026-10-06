@@ -15,3 +15,11 @@ results/
 
 .DS_Store
 .vscode/
+# Thesis figures (regenerate with --plot-only)
+figures/
+
+# Packaging
+*.egg-info/
+
+# Old scripts, kept locally only
+numerical_experiments/
