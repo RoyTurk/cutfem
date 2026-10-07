@@ -206,6 +206,16 @@ def split_solution(x, *functions):
         offset += n
 
 
+def join_solution(x, *functions):
+    """Copy Functions into a (monolithic) PETSc vector; inverse of split_solution."""
+    array, offset = x.array_w, 0
+    for f in functions:
+        index_map = f.function_space.dofmap.index_map
+        n = index_map.size_local * f.function_space.dofmap.index_map_bs
+        array[offset:offset + n] = f.x.array[:n]
+        offset += n
+
+
 @dataclass
 class System:
     """Assembled CutFEM system; frees its PETSc objects when used in ``with``.
@@ -369,8 +379,12 @@ def eigenvalues(A):
 # Output
 
 
-def save_vtk(path, mesh, functions, exact=None, degree=3):
+class VTKSeries:
     """Write Functions on a fitted reparametrization of the physical domain.
+
+    The reparametrized mesh and the interpolation data are built once; each
+    :meth:`write` interpolates the current values and adds a time to the
+    ``.pvd`` file. Use as ``with VTKSeries(...) as vtk: vtk.write(t)``.
 
     Parameters
     ----------
@@ -386,33 +400,58 @@ def save_vtk(path, mesh, functions, exact=None, degree=3):
     degree : int
         Polynomial degree of the reparametrized mesh and output spaces.
     """
-    from pathlib import Path
 
-    import dolfinx.io
-    import qugar.reparam
+    def __init__(self, path, mesh, functions, exact=None, degree=3):
+        from pathlib import Path
 
-    rep_mesh = qugar.reparam.create_reparam_mesh(
-        mesh, degree=degree, levelset=False).create_mesh()
-    x = ufl.SpatialCoordinate(rep_mesh)
-    exact = exact or {}
+        import dolfinx.io
+        import qugar.reparam
 
-    fields = []
-    for name, f in functions.items():
-        V = lagrange_space(rep_mesh, degree, shape=f.ufl_shape or None)
-        f_rep = dolfinx.fem.Function(V, name=name)
-        f_rep.interpolate_nonmatching(
-            f, *qugar.reparam.create_interpolation_data(V, f.function_space))
-        fields.append(f_rep)
+        rep_mesh = qugar.reparam.create_reparam_mesh(
+            mesh, degree=degree, levelset=False).create_mesh()
+        x = ufl.SpatialCoordinate(rep_mesh)
+        exact = exact or {}
 
-        if name in exact:
-            f_ex = dolfinx.fem.Function(V, name=f"{name}_exact")
-            f_ex.interpolate(dolfinx.fem.Expression(
-                exact[name](x), V.element.interpolation_points))
-            f_err = dolfinx.fem.Function(V, name=f"{name}_error")
+        self._sources, self._errors, self._fields = [], [], []
+        for name, f in functions.items():
+            V = lagrange_space(rep_mesh, degree, shape=f.ufl_shape or None)
+            f_rep = dolfinx.fem.Function(V, name=name)
+            data = qugar.reparam.create_interpolation_data(V, f.function_space)
+            self._sources.append((f_rep, f, data))
+            self._fields.append(f_rep)
+
+            if name in exact:
+                f_ex = dolfinx.fem.Function(V, name=f"{name}_exact")
+                f_ex.interpolate(dolfinx.fem.Expression(
+                    exact[name](x), V.element.interpolation_points))
+                f_err = dolfinx.fem.Function(V, name=f"{name}_error")
+                self._errors.append((f_err, f_rep, f_ex))
+                self._fields += [f_ex, f_err]
+
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        self._file = dolfinx.io.VTKFile(rep_mesh.comm, str(path), "w")
+
+    def write(self, t=0.0):
+        """Interpolate the current values and write them at time ``t``."""
+        for f_rep, f, data in self._sources:
+            f_rep.interpolate_nonmatching(f, *data)
+        for f_err, f_rep, f_ex in self._errors:
             f_err.x.array[:] = f_rep.x.array - f_ex.x.array
-            fields += [f_ex, f_err]
+        self._file.write_function(self._fields, t)
 
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with dolfinx.io.VTKFile(rep_mesh.comm, str(path), "w") as vtk:
-        vtk.write_function(fields)
+    def close(self):
+        """Close the output file."""
+        self._file.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
+
+
+def save_vtk(path, mesh, functions, exact=None, degree=3):
+    """Write Functions once; see :class:`VTKSeries` for the parameters."""
+    with VTKSeries(path, mesh, functions, exact, degree) as vtk:
+        vtk.write()
