@@ -12,9 +12,9 @@ import numpy as np
 import ufl
 
 from cutfem import core, study
-from cutfem.problems import navier_stokes as ns
+from cutfem.problems import dfg2d1
 
-PARAMS = ns.Params(ref=1.0)
+PARAMS = dfg2d1.Params(ref=1.0)
 
 
 def check_geometry(s):
@@ -40,29 +40,30 @@ def check_geometry(s):
 
 def compute():
     """Geometry check, Stokes solve, then the full Picard iteration."""
-    out = study.RESULTS_DIR / "navier_stokes"
+    out = study.RESULTS_DIR / "dfg2d1"
     tag = f"ref{PARAMS.ref:g}"
-    with ns.build(PARAMS) as system:
+    with dfg2d1.build(PARAMS) as system:
         study.print0(f"h = {system.h:.4e}, n_dofs = {system.n_dofs}, "
                      f"MPI ranks = {system.mesh.comm.size}")
         check_geometry(system)
 
         study.print0("\nStokes solve (first Picard iterate)")
-        ns.save_vtk(out / f"stokes_{tag}.pvd", system, ns.solve(system, max_iter=0))
+        stokes = dfg2d1.solve(system, max_iter=0)
+        dfg2d1.save_vtk(out / f"stokes_{tag}.pvd", system, stokes)
 
         study.print0("\nPicard iteration")
-        ns.update_parameters(system, reset=True)
-        solution = ns.solve(system, verbose=True)
-        ns.save_vtk(out / f"navier_stokes_{tag}.pvd", system, solution)
-        values = ns.benchmark(system, solution)
+        dfg2d1.update_parameters(system, reset=True)
+        solution = dfg2d1.solve(system, verbose=True)
+        dfg2d1.save_vtk(out / f"navier_stokes_{tag}.pvd", system, solution)
+        values = dfg2d1.benchmark(system, solution)
 
     study.print0(f"\n  {'quantity':<10}{'computed':>16}{'reference':>16}"
                  f"{'rel. error':>14}")
-    for q, ref in ns.DFG_2D1_REF.items():
+    for q, ref in dfg2d1.DFG_2D1_REF.items():
         study.print0(f"  {q:<10}{values[q]:>16.8f}{ref:>16.8f}"
                      f"{abs(values[q] - ref) / abs(ref):>14.3e}")
     return {"params": PARAMS, "history": solution[2], **values}
 
 
 if __name__ == "__main__":
-    study.run("navier_stokes/single_run", compute)
+    study.run("dfg2d1/single_run", compute)

@@ -14,9 +14,9 @@ Usage::
 import numpy as np
 
 from cutfem import core, plotting, study
-from cutfem.problems import navier_stokes as ns
+from cutfem.problems import dfg2d1
 
-BASE = ns.Params()
+BASE = dfg2d1.Params()
 X_LINE = np.linspace(BASE.xmin[0], BASE.xmax[0], 2201)
 Y_LINE = np.linspace(BASE.xmin[1], BASE.xmax[1], 411)
 
@@ -47,8 +47,8 @@ def compute(args):
     table.header()
     refs, h, horizontal, vertical = sorted(args.refs), [], [], []
     for ref in refs:
-        with ns.build(ns.Params(ref=ref)) as system:
-            uh, _, history = ns.solve(system)
+        with dfg2d1.build(dfg2d1.Params(ref=ref)) as system:
+            uh, _, history = dfg2d1.solve(system)
             h.append(system.h)
             horizontal.append(speed_along(uh, horizontal_points))
             vertical.append(speed_along(uh, vertical_points))
@@ -88,4 +88,4 @@ def plot(data):
 
 
 if __name__ == "__main__":
-    study.run("navier_stokes/profiles", compute, plot, arguments=arguments)
+    study.run("dfg2d1/profiles", compute, plot, arguments=arguments)

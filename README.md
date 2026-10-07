@@ -11,7 +11,7 @@ src/cutfem/
     study.py            sweeps, tables, rates, data/figure output, command line
     plotting.py         thesis figure sizes, colours and helpers
     thesis.mplstyle     the style of every figure
-    problems/           one module per PDE: Params, build, solve, errors
+    problems/           one module per problem: Params, build, solve, errors
 experiments/<problem>/  study scripts
 results/                data (.json) and ParaView output (git-ignored)
 figures/                figures (.pdf) for the thesis (git-ignored)
