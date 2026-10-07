@@ -15,7 +15,12 @@ src/cutfem/
 experiments/<problem>/  study scripts
 results/                data (.json) and ParaView output (git-ignored)
 figures/                figures (.pdf) for the thesis (git-ignored)
+data/                   external reference data (git-ignored)
 ```
+
+The DFG 2D-3 comparison reads the FEATFLOW drag/lift time series from
+`data/featflow/draglift_q2_cn_lv1-6_dt4/bdforces_lv6`, available from the
+[FEATFLOW 2D-3 benchmark page](https://wwwold.mathematik.tu-dortmund.de/~featflow/en/benchmarks/cfdbenchmarking/flow/dfg_benchmark3_re100.html).
 
 ## Setup
 

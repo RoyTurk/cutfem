@@ -23,3 +23,6 @@ figures/
 
 # Old scripts, kept locally only
 numerical_experiments/
+
+# External reference data (e.g. FEATFLOW drag/lift files), downloaded locally
+data/
