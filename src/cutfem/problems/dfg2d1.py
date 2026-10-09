@@ -297,6 +297,38 @@ def errors(s: System, solution) -> dict:
             for q, ref in DFG_2D1_REF.items()}
 
 
+def inf_sup_matrices(s: System):
+    """Matrices of the inf-sup test, as in stokes.inf_sup (mu -> nu).
+
+    Returns ``(N, A_up, G_1, M)``:
+        N    velocity norm nu ||grad v||^2_{Omega_T} + nu h^-1 ||v||^2_Gamma,
+             identity on the Dirichlet rows (inflow and walls),
+        A_up coupling b_h(q, v) = -(q, div v) + (q, v.n)_Gamma, zero
+             Dirichlet rows,
+        G_1  pressure ghost penalty for gamma_p = 1 (it is linear in gamma_p),
+        M    pressure mass matrix on Omega_T, weight 1 / nu.
+    The flow solution is not needed: the test only involves the coupling.
+    """
+    nu, h, m = s.params.nu, s.h, s.measures
+    u, v = ufl.TrialFunction(s.V), ufl.TestFunction(s.V)
+    pr, q = ufl.TrialFunction(s.Q), ufl.TestFunction(s.Q)
+
+    N = core.assemble_matrix(nu * ufl.inner(ufl.grad(u), ufl.grad(v)) * m.dx,
+                             cut=False, bcs=s.bcs)
+    core.add_matrix(N, (nu / h) * ufl.inner(u, v) * m.ds, cut=True, bcs=s.bcs)
+    A_up = dolfinx.fem.petsc.assemble_matrix(s.a_forms[0][1], bcs=s.bcs)
+    A_up.assemble()
+
+    gamma_p = float(s.consts["gamma_p"].value)
+    s.consts["gamma_p"].value = 1.0
+    G_1 = dolfinx.fem.petsc.assemble_matrix(s.g_forms[1][1])
+    G_1.assemble()
+    s.consts["gamma_p"].value = gamma_p
+
+    M = core.assemble_matrix((1.0 / nu) * pr * q * m.dx, cut=False)
+    return N, A_up, G_1, M
+
+
 def expected_rates(p: Params) -> dict:
     """No proven orders for the benchmark functionals."""
     return {}

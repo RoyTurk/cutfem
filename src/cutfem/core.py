@@ -376,6 +376,167 @@ def eigenvalues(A):
     return np.linalg.eigvalsh(to_dense(A))
 
 
+class _InverseOperator:
+    """Shell matrix A^{-1}: products are solves with one MUMPS LU of A."""
+
+    def __init__(self, ksp):
+        self.ksp = ksp
+
+    def mult(self, mat, x, y):
+        self.ksp.solve(x, y)
+
+    def multTranspose(self, mat, x, y):
+        self.ksp.solveTranspose(x, y)
+
+
+def _largest_singular_value(M, tol):
+    """Largest singular value of M by SLEPc thick-restart Lanczos."""
+    from slepc4py import SLEPc
+
+    svd = SLEPc.SVD().create(M.getComm())
+    svd.setOperators(M)
+    svd.setType(SLEPc.SVD.Type.TRLANCZOS)
+    svd.setImplicitTranspose(True)
+    svd.setWhichSingularTriplets(SLEPc.SVD.Which.LARGEST)
+    svd.setDimensions(nsv=1)
+    svd.setTolerances(tol=tol, max_it=1000)
+    svd.solve()
+    if svd.getConverged() < 1:
+        raise RuntimeError("SLEPc SVD did not converge")
+    sigma = svd.getValue(0)
+    svd.destroy()
+    return sigma
+
+
+def condition_estimate(A, tol=1e-8):
+    """2-norm condition number sigma_max / sigma_min of a large sparse matrix.
+
+    Both extreme singular values come from SLEPc's Lanczos bidiagonalization
+    (convergence decided on the residual). sigma_max from A; sigma_min as
+    1 / sigma_max(A^{-1}), because the smallest singular values of A are
+    clustered and converge slowly, while 1 / sigma_min is the well separated
+    largest singular value of A^{-1}. A^{-1} is never formed: its products
+    are solves with one MUMPS LU of A. Returns ``(kappa, sigma_max, sigma_min)``.
+    """
+    ksp = PETSc.KSP().create(A.getComm())
+    ksp.setOperators(A)
+    ksp.setType("preonly")
+    ksp.getPC().setType("lu")
+    ksp.getPC().setFactorSolverType("mumps")
+    ksp.setUp()
+    inverse = PETSc.Mat().createPython(A.getSizes(), _InverseOperator(ksp),
+                                       comm=A.getComm())
+    inverse.setUp()
+
+    sigma_max = _largest_singular_value(A, tol)
+    sigma_min = 1.0 / _largest_singular_value(inverse, tol)
+    inverse.destroy()
+    ksp.destroy()
+    return sigma_max / sigma_min, sigma_max, sigma_min
+
+
+def _lu_ksp(A):
+    """KSP applying A^{-1} by a MUMPS LU factorization."""
+    ksp = PETSc.KSP().create(A.getComm())
+    ksp.setOperators(A)
+    ksp.setType("preonly")
+    ksp.getPC().setType("lu")
+    ksp.getPC().setFactorSolverType("mumps")
+    ksp.setUp()
+    return ksp
+
+
+def _set_lu(st):
+    """Use a MUMPS LU for the linear solves of a SLEPc spectral transform."""
+    ksp = st.getKSP()
+    ksp.setType("preonly")
+    ksp.getPC().setType("lu")
+    ksp.getPC().setFactorSolverType("mumps")
+
+
+class _SchurOperator:
+    """Shell matrix K = A_up^T N^{-1} A_up + G_p (pressure Schur complement)."""
+
+    def __init__(self, A_up, ksp_N, G_p):
+        self.A_up, self.ksp_N, self.G_p = A_up, ksp_N, G_p
+        self.t, self.w = A_up.createVecLeft(), A_up.createVecLeft()
+
+    def mult(self, mat, x, y):
+        self.A_up.mult(x, self.t)
+        self.ksp_N.solve(self.t, self.w)
+        self.A_up.multTranspose(self.w, y)
+        self.G_p.multAdd(x, y, y)
+
+
+def inf_sup_eigenvalues(N, A_up, G_p, M, tol=1e-10):
+    """Extreme eigenvalues of (A_up^T N^{-1} A_up + G_p) q = lambda M q.
+
+    The discrete inf-sup constant is beta_h = sqrt(lambda_min). Sparse
+    version of the Chapelle & Bathe test, for meshes where the Schur
+    complement cannot be formed:
+
+    * lambda_min from the equivalent saddle point pencil
+      [[N, A_up], [A_up^T, -G_p]] x = lambda [[0, 0], [0, -M]] x, by
+      shift-and-invert (MUMPS LU) with a small negative target, so the
+      shifted matrix is nonsingular even if lambda_min = 0;
+    * lambda_max matrix-free, from the shell Schur operator (solves with N).
+
+    N must be symmetric positive definite (Dirichlet rows: identity, with
+    the matching rows of A_up zero). Returns ``(lambda_min, lambda_max)``.
+    """
+    from slepc4py import SLEPc
+
+    comm = N.getComm()
+    A_pu = A_up.copy()
+    A_pu.transpose()
+    G_neg = G_p.copy()
+    G_neg.scale(-1.0)
+    M_neg = M.copy()
+    M_neg.scale(-1.0)
+    zero = PETSc.Mat().createAIJ(N.getSizes(), nnz=0, comm=comm)   # empty block
+    zero.assemble()
+    lhs = PETSc.Mat().createNest([[N, A_up], [A_pu, G_neg]], comm=comm)
+    rhs = PETSc.Mat().createNest([[zero, None], [None, M_neg]], comm=comm)
+    lhs, rhs = lhs.convert("aij"), rhs.convert("aij")
+
+    eps = SLEPc.EPS().create(comm)
+    eps.setOperators(lhs, rhs)
+    eps.setProblemType(SLEPc.EPS.ProblemType.GNHEP)
+    eps.setTarget(-1e-3)
+    eps.setWhichEigenpairs(SLEPc.EPS.Which.TARGET_MAGNITUDE)
+    eps.getST().setType(SLEPc.ST.Type.SINVERT)
+    _set_lu(eps.getST())
+    eps.setDimensions(nev=1)
+    eps.setTolerances(tol=tol, max_it=500)
+    eps.solve()
+    values = [eps.getEigenvalue(i).real for i in range(eps.getConverged())]
+    if not values:
+        raise RuntimeError("SLEPc: no converged eigenvalue for lambda_min")
+    lam_min = max(min(values), 0.0)
+    for obj in (eps, lhs, rhs, A_pu, G_neg, M_neg, zero):
+        obj.destroy()
+
+    ksp_N = _lu_ksp(N)
+    n_p = A_up.getSizes()[1]
+    K = PETSc.Mat().createPython((n_p, n_p), _SchurOperator(A_up, ksp_N, G_p),
+                                 comm=comm)
+    K.setUp()
+    eps = SLEPc.EPS().create(comm)
+    eps.setOperators(K, M)
+    eps.setProblemType(SLEPc.EPS.ProblemType.GHEP)
+    eps.setWhichEigenpairs(SLEPc.EPS.Which.LARGEST_REAL)
+    _set_lu(eps.getST())
+    eps.setDimensions(nev=1)
+    eps.setTolerances(tol=tol, max_it=500)
+    eps.solve()
+    if eps.getConverged() < 1:
+        raise RuntimeError("SLEPc: no converged eigenvalue for lambda_max")
+    lam_max = eps.getEigenvalue(0).real
+    for obj in (eps, K, ksp_N):
+        obj.destroy()
+    return lam_min, lam_max
+
+
 # Output
 
 
