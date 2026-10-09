@@ -37,7 +37,7 @@ class Params:
     nu: float = 1e-3            # kinematic viscosity
     U_m: float = 0.3            # maximum inflow velocity
     U: float = 0.2              # mean velocity (ghost penalty weight)
-    ref: float = 1.0            # refinement: 220 ref x 41 ref cells
+    n_y: int = 40               # cells across the channel (see channel_mesh)
     v_degree: int = 2
     p_degree: int = 1
     tol: float = 1e-10          # Picard tolerance on the residual norm
@@ -94,17 +94,23 @@ def _dirichlet_bcs(mesh, V, p: Params):
     return [dolfinx.fem.dirichletbc(g, dofs)]
 
 
+def channel_mesh(p: Params):
+    """Uniform Cartesian mesh of the channel with n_y cells across its height.
+
+    h = H / n_y and n_x = round(L / h), so the cells are square up to the
+    rounding of n_x (well below 1 %). Since H = 0.41, the cylinder is never
+    aligned with the grid lines for the usual n_y (no tangential cuts).
+    Returns ``(mesh, h)`` with h the largest cell side.
+    """
+    length, height = (b - a for a, b in zip(p.xmin, p.xmax, strict=True))
+    n_x = round(length * p.n_y / height)
+    return core.disk_mesh([n_x, p.n_y], p.xmin, p.xmax, p.center, p.radius,
+                          inside=False)
+
+
 def build(p: Params) -> System:
     """Build forms, matrices and Picard state for the DFG 2D-1 problem."""
-    n_x = max(1, round(220 * p.ref))
-    n_y = max(1, round(41 * p.ref))
-    hx = (p.xmax[0] - p.xmin[0]) / n_x
-    hy = (p.xmax[1] - p.xmin[1]) / n_y
-    if max(hx, hy) / min(hx, hy) > 1.1:
-        raise ValueError(f"cells too anisotropic: hx = {hx:.4e}, hy = {hy:.4e}")
-
-    mesh, h = core.disk_mesh([n_x, n_y], p.xmin, p.xmax, p.center, p.radius,
-                             inside=False)
+    mesh, h = channel_mesh(p)
     m = core.cut_measures(mesh)
     V = core.lagrange_space(mesh, p.v_degree, shape=(2,))
     Q = core.lagrange_space(mesh, p.p_degree)

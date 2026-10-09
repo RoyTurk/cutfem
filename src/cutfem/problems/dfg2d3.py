@@ -88,8 +88,7 @@ def inflow_amplitude(p: Params, t):
 
 def build(p: Params) -> System:
     """Build residual, Jacobian, ghost penalty matrix and solver."""
-    mesh, h = core.disk_mesh([round(220 * p.ref), round(41 * p.ref)],
-                             p.xmin, p.xmax, p.center, p.radius, inside=False)
+    mesh, h = dfg2d1.channel_mesh(p)
     m = core.cut_measures(mesh)
     V = core.lagrange_space(mesh, p.v_degree, shape=(2,))
     Q = core.lagrange_space(mesh, p.p_degree)

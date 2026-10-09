@@ -9,7 +9,7 @@ FEATFLOW reference (Q2/P1disc level 6, Crank-Nicolson, dt = 1/1600).
 
 Usage::
 
-    python single_run.py                          # ref = 1, dt = 1/1600
+    python single_run.py                          # n_y = 40, dt = 1/1600
     python single_run.py --dt 0.02                # quick run on [0, 8]
     python single_run.py --plot-only
 """
@@ -27,8 +27,8 @@ REFERENCE = (study.ROOT / "data" / "featflow" / "draglift_q2_cn_lv1-6_dt4"
 def arguments(parser):
     """Mesh, time step and output options from the command line."""
     defaults = dfg2d3.Params()
-    parser.add_argument("--ref", type=float, default=defaults.ref,
-                        help="refinement level (h ~ 0.01 / ref)")
+    parser.add_argument("--n-y", type=int, default=defaults.n_y,
+                        help="cells across the channel (h = 0.41 / n_y)")
     parser.add_argument("--dt", type=float, default=defaults.dt)
     parser.add_argument("--t-end", type=float, default=defaults.t_end)
     parser.add_argument("--save-every", type=int, default=400,
@@ -39,10 +39,10 @@ def arguments(parser):
 
 def compute(args):
     """Run the time loop, report progress and save intermediate data."""
-    params = dfg2d3.Params(ref=args.ref, dt=args.dt, t_end=args.t_end)
+    params = dfg2d3.Params(n_y=args.n_y, dt=args.dt, t_end=args.t_end)
     n_steps = round(params.t_end / params.dt)
     vtk_steps = max(1, round(args.vtk_every / params.dt))
-    vtk_path = study.RESULTS_DIR / "dfg2d3" / f"solution_ref{params.ref:g}.pvd"
+    vtk_path = study.RESULTS_DIR / "dfg2d3" / f"solution_ny{params.n_y}.pvd"
     start = time.perf_counter()
 
     with dfg2d3.build(params) as system, dfg2d3.vtk_series(vtk_path, system) as vtk:

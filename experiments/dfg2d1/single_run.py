@@ -14,7 +14,7 @@ import ufl
 from cutfem import core, study
 from cutfem.problems import dfg2d1
 
-PARAMS = dfg2d1.Params(ref=1.0)
+PARAMS = dfg2d1.Params(n_y=40)
 
 
 def check_geometry(s):
@@ -41,7 +41,7 @@ def check_geometry(s):
 def compute():
     """Geometry check, Stokes solve, then the full Picard iteration."""
     out = study.RESULTS_DIR / "dfg2d1"
-    tag = f"ref{PARAMS.ref:g}"
+    tag = f"ny{PARAMS.n_y}"
     with dfg2d1.build(PARAMS) as system:
         study.print0(f"h = {system.h:.4e}, n_dofs = {system.n_dofs}, "
                      f"MPI ranks = {system.mesh.comm.size}")
