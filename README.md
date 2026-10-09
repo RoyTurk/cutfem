@@ -41,13 +41,3 @@ Data goes to `results/<problem>/<study>.json` (with parameters, git commit and
 date), figures to `figures/<problem>/<study>.pdf`. Figures are made at their
 printed size: include them in LaTeX without scaling,
 `\includegraphics{figures/poisson/convergence.pdf}`.
-
-## Known issue: JIT linking
-
-The linker in `qugar-env` is older than the macOS SDK, so compiling new forms
-fails at the link step. Until the environment is updated, use the system
-compiler:
-
-```bash
-export CC=/usr/bin/clang
-```
