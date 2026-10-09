@@ -289,6 +289,26 @@ def cut_mesh(ax, geometry, center, radius, margin=None):
     return handles
 
 
+def broken_axis(ax_top, ax_bottom, size=6.0):
+    """Join two stacked axes (shared x) into one y-axis with a break.
+
+    Plot the same curves in both axes and give each its own y-range (e.g.
+    an off-scale case above, the main cases below); this hides the facing
+    spines and x ticks and draws the break marks on both y-axes. Create the
+    axes with ``figure(nrows=2, sharex=True, gridspec_kw=...)``.
+    """
+    ax_top.spines["bottom"].set_visible(False)
+    ax_bottom.spines["top"].set_visible(False)
+    ax_top.tick_params(axis="x", which="both", bottom=False, top=False,
+                       labelbottom=False)
+    ax_bottom.tick_params(axis="x", which="both", top=False)
+    marks = {"marker": [(-1, -0.5), (1, 0.5)], "markersize": size,
+             "linestyle": "none", "color": INK, "mec": INK, "mew": 0.8,
+             "clip_on": False}
+    ax_top.plot([0, 1], [0, 0], transform=ax_top.transAxes, **marks)
+    ax_bottom.plot([0, 1], [1, 1], transform=ax_bottom.transAxes, **marks)
+
+
 def legend_above(fig, ax=None, ncols=None, handles=None):
     """One frameless legend above all panels.
 
