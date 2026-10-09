@@ -24,10 +24,9 @@ from cutfem import core
 from cutfem.problems import dfg2d1
 
 # DFG 2D-3 reference values (FEATFLOW, Q2/P1disc level 6, Crank-Nicolson,
-# dt = 1/1600). dp = p(front) - p(back) at t = 8, as in 2D-1; it is negative
-# (John 2004: -0.1116), FEATFLOW lists its magnitude.
+# dt = 1/1600).
 DFG_2D3_REF = {"c_D_max": 2.9437637, "t_c_D_max": 3.9365625,
-               "c_L_max": 0.4774878, "t_c_L_max": 5.6928125, "dp_end": -0.1115414}
+               "c_L_max": 0.4774878, "t_c_L_max": 5.6928125}
 
 # BDF coefficients (a0, a1, a2) of (a0 u^{n+1} + a1 u^n + a2 u^{n-1}) / dt
 BDF1 = (1.0, -1.0, 0.0)
@@ -241,13 +240,6 @@ def drag_lift(s: System):
         for f in s.force_forms]
     scale = 2.0 / ((2.0 / 3.0 * p.U_m) ** 2 * 2.0 * p.radius)
     return scale * force[0], scale * force[1]
-
-
-def pressure_drop(s: System):
-    """p(x_c - r, y_c) - p(x_c + r, y_c) of the current solution."""
-    xc, yc, r = *s.params.center, s.params.radius
-    p_front, p_back = core.eval_at_points(s.ph, [[xc - r, yc], [xc + r, yc]])
-    return float(p_front - p_back)
 
 
 def solve(s: System, on_step=None):

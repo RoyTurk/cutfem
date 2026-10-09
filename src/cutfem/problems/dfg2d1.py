@@ -20,7 +20,7 @@ from petsc4py import PETSc
 from cutfem import core
 
 # DFG Flow Around Cylinder 2D-1 reference values (Schaefer & Turek, 1996)
-DFG_2D1_REF = {"c_D": 5.57953523384, "c_L": 0.010618948146, "dp": 0.11752016697}
+DFG_2D1_REF = {"c_D": 5.57953523384, "c_L": 0.010618948146}
 QUANTITIES = tuple(DFG_2D1_REF)
 ERRORS = tuple(f"err_{q}" for q in QUANTITIES)
 TUNABLE = ("nu", "U", "gamma_N1", "gamma_N2", "gamma_u", "gamma_p")
@@ -273,12 +273,11 @@ def solve(s: System, max_iter=None, verbose=False):
 
 
 def benchmark(s: System, solution) -> dict:
-    """DFG 2D-1 quantities c_D, c_L and dp.
+    """DFG 2D-1 drag and lift coefficients c_D and c_L.
 
     c_D, c_L = 2 F / (U_bar^2 D) with U_bar = 2/3 U_m and D = 2 r, where F is
     the Nitsche-consistent traction on the cylinder (n out of the fluid):
-        F = int_Gamma (p n - nu grad(u) n + gN1 nu / h u + gN2 / h (u.n) n) ds,
-    and dp = p(x_c - r, y_c) - p(x_c + r, y_c).
+        F = int_Gamma (p n - nu grad(u) n + gN1 nu / h u + gN2 / h (u.n) n) ds.
     """
     uh, ph, _ = solution
     p, c, h = s.params, s.consts, s.h
@@ -288,11 +287,7 @@ def benchmark(s: System, solution) -> dict:
                 + (c["gamma_N2"] / h) * ufl.dot(uh, n) * n)
     force = np.array([core.integrate(traction[i] * ds) for i in range(2)])
     scale = 2.0 / ((2.0 / 3.0 * p.U_m) ** 2 * 2.0 * p.radius)
-
-    xc, yc, r = *p.center, p.radius
-    p_front, p_back = core.eval_at_points(ph, [[xc - r, yc], [xc + r, yc]])
-    return {"c_D": scale * force[0], "c_L": scale * force[1],
-            "dp": float(p_front - p_back)}
+    return {"c_D": scale * force[0], "c_L": scale * force[1]}
 
 
 def errors(s: System, solution) -> dict:

@@ -63,9 +63,8 @@ def compute(args):
                     study.save_data(NAME, {"params": params, **record})
 
         record = dfg2d3.solve(system, on_step=on_step)
-        dp_end = dfg2d3.pressure_drop(system)
 
-    values = {**dfg2d3.peaks(record), "dp_end": dp_end}
+    values = dfg2d3.peaks(record)
     study.print0(f"\n  {'quantity':<10}{'computed':>14}{'reference':>14}")
     for key, ref in dfg2d3.DFG_2D3_REF.items():
         study.print0(f"  {key:<10}{values[key]:>14.6f}{ref:>14.6f}")
