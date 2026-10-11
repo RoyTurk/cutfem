@@ -16,6 +16,7 @@ font.family: serif
 font.serif: cmr10, Computer Modern Roman, DejaVu Serif
 mathtext.fontset: cm
 axes.formatter.use_mathtext: True
+axes.formatter.limits: -3, 4      # common exponent above linear axes beyond 1e-3 / 1e4
 font.size: 10
 axes.labelsize: 10
 axes.titlesize: 10
@@ -23,12 +24,7 @@ legend.fontsize: 9
 xtick.labelsize: 9
 ytick.labelsize: 9
 
-# Ink: near-black text and frame, recessive grid
-text.color: 1a1a1a
-axes.labelcolor: 1a1a1a
-axes.edgecolor: 1a1a1a
-xtick.color: 1a1a1a
-ytick.color: 1a1a1a
+# Frame and recessive grid (matplotlib default colours otherwise)
 axes.linewidth: 0.6
 axes.grid: True
 axes.grid.which: major
@@ -53,10 +49,13 @@ ytick.minor.size: 1.5
 lines.linewidth: 1.2
 lines.markersize: 4
 lines.markeredgewidth: 0.8
-axes.prop_cycle: cycler(color=["6a4bb0", "0f9a95", "c97a1a", "c2456b"])
+# Colour cycle: matplotlib default (tab10)
 
-# Legend: frameless
-legend.frameon: False
+# Legend: inside the axes, thin frame so it stays readable over the grid
+legend.frameon: True
+legend.framealpha: 0.9
+legend.edgecolor: 0.8
+legend.fancybox: False
 legend.handlelength: 1.8
 legend.columnspacing: 1.2
-legend.borderaxespad: 0.3
+legend.borderaxespad: 0.4

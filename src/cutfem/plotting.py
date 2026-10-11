@@ -1,14 +1,24 @@
-"""Thesis figure style, sizes, colours and plot helpers.
+r"""Thesis figure style, sizes, colours and plot helpers.
 
 Rules followed by every figure:
 
-* Created at its printed size (``figure``), included in LaTeX unscaled.
-* No titles: the LaTeX caption says what the figure shows. Panels of a
-  multi-panel figure are identified with ``panel_label``.
-* Categorical colours in a fixed order (``CATEGORICAL``) for unrelated
-  configurations; one light-to-dark ramp (``ordered_colors``) for an ordered
-  parameter sweep, with the value 0 (no stabilization) always in ``NEUTRAL``.
-* Reference orders shown as slope triangles (``slope_triangle``).
+* Created at its printed size (``figure``), included in LaTeX unscaled, so
+  its fonts match the text. At most two panels per row; panels sharing a
+  parameter axis are stacked with ``sharex=True`` rather than squeezed.
+* No titles: the LaTeX caption says what the figure shows. Axis labels are
+  symbols only (``$\kappa(A)$``, ``$\beta_h$``), defined in the caption.
+  Panels of a multi-panel figure are identified with ``panel_label``.
+* Matplotlib default colours (blue, orange, green, red, ...) in their
+  cycle order for every set of curves, including parameter sweeps; curves
+  are also told apart by their markers. A case without stabilization is
+  labelled by its parameter value (e.g. tau = 0), like the others.
+* One legend per figure, below all panels (``legend``).
+* Ticks: powers of ten on log axes, with 1, 2, 5 times powers of ten when
+  the axis spans less than 1.5 decades (``finalize``); plain decimals for
+  mesh sizes; a common exponent above the axis for linear axes with very
+  small or large values.
+* Reference orders shown as slope triangles below all curves
+  (``slope_triangle``).
 """
 
 import logging
@@ -16,7 +26,6 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.colors import LinearSegmentedColormap
 
 STYLE = Path(__file__).with_name("thesis.mplstyle")
 
@@ -24,13 +33,12 @@ STYLE = Path(__file__).with_name("thesis.mplstyle")
 TEXTWIDTH = 15.0 / 2.54     # A4 thesis, 11pt
 COLUMNWIDTH = 3.5           # two-column paper
 WIDTHS = {"full": TEXTWIDTH, "column": COLUMNWIDTH}
+GOLDEN = (np.sqrt(5.0) - 1.0) / 2.0
 
-# Colours (validated for colour-vision deficiency, adjacent pairs)
-CATEGORICAL = ["#6a4bb0", "#0f9a95", "#c97a1a", "#c2456b"]
-NEUTRAL = "#8a8a8a"
-INK = "#1a1a1a"
+# Colours: matplotlib defaults
+CATEGORICAL = [f"C{i}" for i in range(10)]
+INK = "black"
 MARKERS = ["o", "s", "^", "D", "v", "P"]
-_RAMP = LinearSegmentedColormap.from_list("violet", ["#c9bce8", "#6a4bb0", "#2a1a5e"])
 
 
 def use_style():
@@ -40,19 +48,19 @@ def use_style():
     logging.getLogger("fontTools").setLevel(logging.ERROR)
 
 
-def figure(nrows=1, ncols=1, width="full", aspect=0.75, **kwargs):
+def figure(nrows=1, ncols=1, width="full", aspect=GOLDEN, **kwargs):
     """Create a figure at its printed size.
 
     Parameters
     ----------
     nrows, ncols : int
-        Panel grid.
+        Panel grid (at most two columns at full width).
     width : {"full", "column"} or float
         Printed width: a named width, or a fraction of the text width.
     aspect : float
-        Height / width of each panel.
+        Height / width of each panel (default: golden ratio).
     **kwargs
-        Passed to ``plt.subplots`` (e.g. ``sharey=True``).
+        Passed to ``plt.subplots`` (e.g. ``sharex=True``).
     """
     w = WIDTHS[width] if isinstance(width, str) else width * TEXTWIDTH
     h = w / ncols * aspect * nrows
@@ -60,26 +68,31 @@ def figure(nrows=1, ncols=1, width="full", aspect=0.75, **kwargs):
 
 
 def ordered_colors(values):
-    """Colours for an ordered parameter sweep (light = small, dark = large).
+    """Colours for a parameter sweep: the default cycle, in the given order."""
+    return [CATEGORICAL[i % len(CATEGORICAL)] for i in range(len(values))]
 
-    The value 0 (typically "no stabilization") is always ``NEUTRAL``.
+
+def legend(ax, ncols=None, handles=None):
+    """Add the figure legend below all panels, outside the plot area.
+
+    Built from the curves of ``ax`` (default) or from explicit ``handles``,
+    so curves repeated in several panels appear once.
     """
-    nonzero = [v for v in values if v != 0]
-    ramp = _RAMP(np.linspace(0.0, 1.0, len(nonzero))) if len(nonzero) > 1 \
-        else [_RAMP(0.5)] * len(nonzero)
-    colors = iter(ramp)
-    return [NEUTRAL if v == 0 else next(colors) for v in values]
+    if handles is None:
+        handles, _ = ax.get_legend_handles_labels()
+    return ax.figure.legend(handles=handles, loc="outside lower center",
+                            ncols=ncols or min(len(handles), 4))
 
 
 def slope_triangle(ax, x, y, order, size=0.2, gap=4.0):
-    """Draw a slope triangle of the given order on log-log axes, clear of the data.
+    """Draw a slope triangle of the given order on log-log axes, below all curves.
 
     Call after every curve of ``ax`` is drawn. The axis limits are frozen,
-    then the triangle and its "1" and order labels are placed at the free
-    position closest to the reference curve ``(x, y)``: no line, marker or
-    scatter point of the axes comes closer than ``gap`` points (plus the
-    marker radius). If no position is free, the y-range is widened step by
-    step until one is.
+    then the triangle and its "1" and order labels are placed below every
+    line, marker and scatter point over their horizontal extent (with
+    ``gap`` points plus the marker radius to spare), at the position closest
+    to the reference curve ``(x, y)``, i.e. right under the curves. If no
+    such position exists, the y-range is extended downwards until one does.
 
     Parameters
     ----------
@@ -110,7 +123,7 @@ def slope_triangle(ax, x, y, order, size=0.2, gap=4.0):
                 centers[:, None, :] - target[None, :, :], axis=2), axis=1)
             candidates = [candidates[i] for i in np.argsort(distance)]
         for candidate in candidates:
-            if _is_free(candidate, obstacles, clearance):
+            if _is_below(candidate, obstacles, clearance):
                 _draw_triangle(ax, candidate, order, scale)
                 return
         bottom, top = ax.get_ylim()      # nothing free: widen the y-range
@@ -192,26 +205,22 @@ def _triangle_candidates(ax, order, size, clearance, scale, fontsize=8.0, n=40):
     return candidates
 
 
-def _is_free(candidate, points, clearance):
-    """Check that no point is inside or within ``clearance`` of the candidate."""
-    from matplotlib.path import Path
+def _is_below(candidate, points, clearance):
+    """Check that the candidate and its labels lie below every point above it.
 
+    Over the horizontal extent of the triangle and its labels (widened by
+    ``clearance``), every point must be at least ``clearance`` above their
+    top; points outside that extent do not matter.
+    """
     if not len(points):
         return True
+    boxes = np.array(candidate["boxes"])
     v = candidate["vertices"]
-    if Path(v).contains_points(points).any():
-        return False
-    for p, q in ((v[0], v[1]), (v[1], v[2]), (v[2], v[0])):
-        t = np.clip(((points - p) @ (q - p)) / ((q - p) @ (q - p)), 0.0, 1.0)
-        distance = np.linalg.norm(points - (p + t[:, None] * (q - p)), axis=1)
-        if (distance < clearance).any():
-            return False
-    for x0, y0, x1, y1 in candidate["boxes"]:
-        inside = ((points[:, 0] > x0 - clearance) & (points[:, 0] < x1 + clearance)
-                  & (points[:, 1] > y0 - clearance) & (points[:, 1] < y1 + clearance))
-        if inside.any():
-            return False
-    return True
+    left = min(v[:, 0].min(), boxes[:, 0].min()) - clearance
+    right = max(v[:, 0].max(), boxes[:, 2].max()) + clearance
+    top = max(v[:, 1].max(), boxes[:, 3].max())
+    over = (points[:, 0] >= left) & (points[:, 0] <= right)
+    return bool(np.all(points[over, 1] > top + clearance))
 
 
 def _draw_triangle(ax, candidate, order, scale):
@@ -307,18 +316,6 @@ def broken_axis(ax_top, ax_bottom, size=6.0):
              "clip_on": False}
     ax_top.plot([0, 1], [0, 0], transform=ax_top.transAxes, **marks)
     ax_bottom.plot([0, 1], [1, 1], transform=ax_bottom.transAxes, **marks)
-
-
-def legend_above(fig, ax=None, ncols=None, handles=None):
-    """One frameless legend above all panels.
-
-    Built from the curves of ``ax`` (default: first axes), or from explicit
-    ``handles``.
-    """
-    if handles is None:
-        handles, _ = (ax or fig.axes[0]).get_legend_handles_labels()
-    fig.legend(handles=handles, loc="outside upper center",
-               ncols=ncols or len(handles))
 
 
 def finalize(fig):

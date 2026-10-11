@@ -107,7 +107,7 @@ def _panels(fig, axes, x, runs, keys, xlabel, log_x, slope=False):
         ax.set_ylabel(ylabel)
         for r, color in zip(runs, colors, strict=True):   # after all curves
             plotting.mark_nonfinite(ax, x, r[key], color)
-    plotting.legend_above(fig, ax=axes[0], ncols=3)
+    plotting.legend(axes[0])
 
 
 def plot(data):
@@ -115,11 +115,11 @@ def plot(data):
     fig_sweep, axes = plotting.figure(ncols=2, aspect=0.85)
     _panels(fig_sweep, axes, data["n_y"], data["sweep"],
             [("beta", r"$\beta_h$"), ("kappa", r"$\lambda_{\max} / \lambda_{\min}$")],
-            r"cells across the channel $n_y$", log_x=False)
+            r"$n_y$", log_x=False)
 
     fig_refine, axes = plotting.figure(ncols=2, aspect=0.85)
     _panels(fig_refine, axes, data["h"], data["refine"],
-            [("beta_min", r"$\min \beta_h$ over 5 meshes"),
+            [("beta_min", r"$\min \beta_h$"),
              ("kappa_max", r"$\max \lambda_{\max} / \lambda_{\min}$")],
             r"$h$", log_x=True, slope=True)
     return {"sweep": fig_sweep, "refinement": fig_refine}

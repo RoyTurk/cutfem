@@ -27,11 +27,11 @@ def compute():
 
 def plot(results):
     """Condition number and L2 error versus h."""
-    fig, (ax_cond, ax_l2) = plotting.figure(ncols=2, aspect=0.9)
+    fig, (ax_cond, ax_l2) = plotting.figure(ncols=2, aspect=0.85)
     colors = plotting.ordered_colors([r["tau"] for r in results])
 
     for i, (r, color) in enumerate(zip(results, colors, strict=True)):
-        label = "no ghost penalty" if r["tau"] == 0 else rf"$\tau = {r['tau']:g}$"
+        label = rf"$\tau = {r['tau']:g}$"
         c = r["columns"]
         ax_cond.loglog(c["h"], c["cond"], color=color,
                        marker=plotting.MARKERS[i], label=label)
@@ -45,7 +45,7 @@ def plot(results):
     ax_l2.set_ylabel(r"$\|u - u_h\|_{L^2(\Omega)}$")
     for ax in (ax_cond, ax_l2):
         ax.set_xlabel(r"$h$")
-    plotting.legend_above(fig)
+    plotting.legend(ax_cond)
     return fig
 
 

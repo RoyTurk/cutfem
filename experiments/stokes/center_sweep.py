@@ -39,7 +39,7 @@ def compute():
 
 def plot(data):
     """Condition number and errors versus the disk center position."""
-    fig, axes = plotting.figure(ncols=3, aspect=1.0)
+    fig, axes = plotting.figure(nrows=3, aspect=0.32, sharex=True)
     colors = plotting.ordered_colors([r["gamma_g"] for r in data["runs"]])
 
     for ax, (key, ylabel) in zip(axes, PANELS, strict=True):
@@ -47,12 +47,12 @@ def plot(data):
             ax.semilogy(data["center_x"], r["columns"][key], color=color,
                         marker=plotting.MARKERS[i], markevery=4,
                         label=rf"$\gamma_g = {r['gamma_g']:g}$")
-        ax.set_xlabel(r"disk center $x_c$")
         ax.set_ylabel(ylabel)
+    axes[-1].set_xlabel(r"$x_c$")
     for r, color in zip(data["runs"], colors, strict=True):
         plotting.mark_nonfinite(axes[0], data["center_x"], r["columns"]["cond"], color)
 
-    plotting.legend_above(fig)
+    plotting.legend(axes[0])
     return fig
 
 

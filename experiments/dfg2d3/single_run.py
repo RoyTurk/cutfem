@@ -76,7 +76,7 @@ def compute(args):
 def plot(data):
     """c_D(t) and c_L(t) against the FEATFLOW reference."""
     reference = dfg2d3.load_reference(REFERENCE)
-    fig, axes = plotting.figure(nrows=2, aspect=0.6)
+    fig, axes = plotting.figure(nrows=2, aspect=0.45, sharex=True)
     labels = {"c_D": r"$c_D$", "c_L": r"$c_L$"}
     for ax, key in zip(axes, labels, strict=True):
         ax.plot(reference["t"], reference[key], color=plotting.INK,
@@ -86,7 +86,7 @@ def plot(data):
         ax.set_xlim(0.0, 8.0)
         ax.set_ylabel(labels[key])
     axes[-1].set_xlabel(r"$t$")
-    plotting.legend_above(fig)
+    plotting.legend(axes[1])
     return fig
 
 

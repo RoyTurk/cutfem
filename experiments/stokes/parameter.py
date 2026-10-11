@@ -28,17 +28,17 @@ def compute():
 
 def plot(results):
     """Velocity (solid) and pressure (dashed) L2 errors versus each parameter."""
-    fig, ax = plotting.figure(width=0.8, aspect=0.7)
+    fig, ax = plotting.figure(width=0.8)
     for i, (name, (_, symbol)) in enumerate(SWEEPS.items()):
         c = results[name]
         color = plotting.CATEGORICAL[i]
         ax.loglog(c[name], c["L2_u"], color=color, marker=plotting.MARKERS[i],
-                  markevery=3, label=rf"${symbol}$, velocity")
+                  markevery=3, label=rf"${symbol}$, $u$")
         ax.loglog(c[name], c["L2_p"], color=color, marker=plotting.MARKERS[i],
-                  markevery=3, linestyle="--", label=rf"${symbol}$, pressure")
-    ax.set_xlabel(r"stabilization parameter $\gamma$")
-    ax.set_ylabel(r"$L^2(\Omega)$ error")
-    plotting.legend_above(fig, ncols=3)
+                  markevery=3, linestyle="--", label=rf"${symbol}$, $p$")
+    ax.set_xlabel(r"$\gamma$")
+    ax.set_ylabel(r"$\|e\|_{L^2(\Omega)}$")
+    plotting.legend(ax, ncols=2)
     return fig
 
 

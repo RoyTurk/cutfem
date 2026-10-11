@@ -41,9 +41,9 @@ def compute():
 
 def plot(results):
     """Negative eigenvalues, smallest eigenvalue and L2 error versus beta."""
-    fig, axes = plotting.figure(ncols=3, aspect=1.0)
+    fig, axes = plotting.figure(nrows=3, aspect=0.32, sharex=True)
     colors = plotting.ordered_colors([r["tau"] for r in results])
-    panels = [("n_neg", "negative eigenvalues", "linear"),
+    panels = [("n_neg", r"$\#\{\lambda_i(A) < 0\}$", "linear"),
               ("min_eig", r"$\lambda_{\min}(A)$", "linear"),
               ("L2_u", r"$\|u - u_h\|_{L^2(\Omega)}$", "log")]
 
@@ -53,15 +53,15 @@ def plot(results):
                     marker=plotting.MARKERS[i], label=rf"$\tau = {r['tau']:g}$")
         ax.set_xscale("log")
         ax.set_yscale(scale)
-        ax.set_xlabel(r"$\beta$")
         ax.set_ylabel(ylabel)
+    axes[-1].set_xlabel(r"$\beta$")
     for ax in axes[:2]:
         ax.axhline(0.0, color=plotting.INK, linewidth=0.6)
 
     beta_0 = threshold(results[0]["columns"])
     if beta_0 is not None:
         axes[0].axvline(beta_0, color=colors[0], linestyle=":", linewidth=1.0)
-    plotting.legend_above(fig)
+    plotting.legend(axes[0])
     return fig
 
 

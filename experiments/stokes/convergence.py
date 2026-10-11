@@ -35,7 +35,7 @@ def compute():
 
 def plot(results):
     """One panel per error quantity, one curve per configuration."""
-    fig, axes = plotting.figure(nrows=2, ncols=2, aspect=0.8)
+    fig, axes = plotting.figure(nrows=2, ncols=2, aspect=0.75)
     rates = stokes.expected_rates(stokes.Params())
 
     for ax, (key, ylabel) in zip(axes.flat, PANELS, strict=True):
@@ -48,7 +48,7 @@ def plot(results):
         ax.set_xlabel(r"$h$")
         ax.set_ylabel(ylabel)
 
-    plotting.legend_above(fig)
+    plotting.legend(axes[0, 0])
     return fig
 
 

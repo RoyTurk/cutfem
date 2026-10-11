@@ -29,7 +29,7 @@ def compute():
 
 def plot(results):
     """L2 and H1 errors versus h, one curve per configuration."""
-    fig, (ax_l2, ax_h1) = plotting.figure(ncols=2, aspect=0.9)
+    fig, (ax_l2, ax_h1) = plotting.figure(ncols=2, aspect=0.85)
     panels = [(ax_l2, "L2_u", 2, r"$\|u - u_h\|_{L^2(\Omega)}$"),
               (ax_h1, "H1_u", 1, r"$|u - u_h|_{H^1(\Omega)}$")]
 
@@ -45,7 +45,7 @@ def plot(results):
         ax.set_xlabel(r"$h$")
         ax.set_ylabel(ylabel)
 
-    plotting.legend_above(fig)
+    plotting.legend(ax_l2)
     return fig
 
 

@@ -48,7 +48,7 @@ def compute():
 
 def plot(data):
     """Sweep figure and worst-cut mesh figure."""
-    fig, axes = plotting.figure(ncols=3, aspect=1.0)
+    fig, axes = plotting.figure(nrows=3, aspect=0.32, sharex=True)
     colors = plotting.ordered_colors([r["tau"] for r in data["runs"]])
     panels = [("min_eig", r"$\lambda_{\min}(A)$", "linear"),
               ("cond", r"$\kappa(A)$", "log"),
@@ -59,18 +59,18 @@ def plot(data):
             ax.plot(data["eps_h"], r["columns"][key], color=color,
                     marker=plotting.MARKERS[i], label=rf"$\tau = {r['tau']:g}$")
         ax.set_yscale(scale)
-        ax.set_xlabel(r"$\varepsilon / h$")
         ax.set_ylabel(ylabel)
+    axes[-1].set_xlabel(r"$\varepsilon / h$")
     axes[0].axhline(0.0, color=plotting.INK, linewidth=0.6)
     for r, color in zip(data["runs"], colors, strict=True):
         plotting.mark_nonfinite(axes[1], data["eps_h"], r["columns"]["cond"], color)
-    plotting.legend_above(fig)
+    plotting.legend(axes[0])
 
     worst = data["worst"]
     fig_mesh, ax = plotting.figure(width=0.6, aspect=1.0)
     handles = plotting.cut_mesh(ax, worst["geometry"], worst["center"],
                                 PARAMS.radius, margin=2 * H)
-    plotting.legend_above(fig_mesh, handles=handles, ncols=2)
+    plotting.legend(ax, handles=handles)
     return {"sweep": fig, "worst_cut": fig_mesh}
 
 

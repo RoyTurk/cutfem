@@ -30,7 +30,7 @@ def compute():
 
 def plot(results):
     """kappa(A_uu) versus h, one curve per gamma_g."""
-    fig, ax = plotting.figure(width=0.7, aspect=0.75)
+    fig, ax = plotting.figure(width=0.7)
     colors = plotting.ordered_colors([r["gamma_g"] for r in results])
     for i, (r, color) in enumerate(zip(results, colors, strict=True)):
         ax.loglog(r["columns"]["h"], r["columns"]["cond"], color=color,
@@ -42,7 +42,7 @@ def plot(results):
     plotting.slope_triangle(ax, best["h"], best["cond"], -2)
     ax.set_xlabel(r"$h$")
     ax.set_ylabel(r"$\kappa(A_{uu})$")
-    plotting.legend_above(fig, ncols=2)
+    plotting.legend(ax)
     return fig
 
 

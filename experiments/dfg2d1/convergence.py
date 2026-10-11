@@ -32,6 +32,8 @@ BASE = dfg2d1.Params()
 X_LINE = np.linspace(BASE.xmin[0], BASE.xmax[0], 2201)
 Y_LINE = np.linspace(BASE.xmin[1], BASE.xmax[1], 411)
 LABELS = {"c_D": r"$c_D$", "c_L": r"$c_L$"}
+# Relative errors |c - c_ref| / |c_ref|
+ERROR_LABELS = {"c_D": r"$\varepsilon_{c_D}$", "c_L": r"$\varepsilon_{c_L}$"}
 N_Y = [12, 17, 24, 34, 48, 68, 96, 136]     # ratio ~sqrt(2)
 N_Y_FIT = 34    # resolved levels: n_y >= 34 (about 8 cells across the cylinder)
 # Reference slope (no proven order for these functionals): 2k for the forces.
@@ -107,7 +109,7 @@ def plot_benchmark(data):
                    linewidth=0.8, label="reference")
         set_h_ticks(ax)
         ax.set_ylabel(LABELS[q])
-    plotting.legend_above(fig)
+    plotting.legend(axes[0])
     return fig
 
 
@@ -121,7 +123,7 @@ def plot_errors(data):
         ax.loglog(h, err, marker=plotting.MARKERS[0])
         plotting.slope_triangle(ax, h[fine], err[fine], REFERENCE_SLOPES[q])
         set_h_ticks(ax)
-        ax.set_ylabel(rf"relative error of {LABELS[q]}")
+        ax.set_ylabel(ERROR_LABELS[q])
     return fig
 
 
@@ -147,7 +149,7 @@ def plot_profiles(data):
     ax_y.set_xlabel(r"$y$")
     for ax in (ax_x, ax_y):
         ax.set_ylabel(r"$|u_h|$")
-    plotting.legend_above(fig, ncols=4)
+    plotting.legend(ax_x)
     return fig
 
 

@@ -127,7 +127,7 @@ def _panels(fig, axes, x, runs, keys, xlabel, log_x):
         ax.set_ylabel(ylabel)
         for r, color in zip(runs, colors, strict=True):
             plotting.mark_nonfinite(ax, x, r[key], color)
-    plotting.legend_above(fig)
+    plotting.legend(axes[0])
 
 
 def plot(data):
@@ -136,7 +136,7 @@ def plot(data):
     _panels(fig_sweep, axes, data["shifts"], data["sweep"],
             [("beta", r"$\beta_h$"),
              ("kappa", r"$\lambda_{\max} / \lambda_{\min}$")],
-            r"center shift $s / h$", log_x=False)
+            r"$s / h$", log_x=False)
 
     fig_refine, axes = plotting.figure(ncols=2, aspect=0.85)
     _panels(fig_refine, axes, data["h"], data["refine"],

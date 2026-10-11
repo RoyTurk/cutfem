@@ -57,7 +57,7 @@ def plot(data):
         plotting.panel_label(ax, rf"{name}, $\gamma_\beta = {run['gamma_beta']:g}$")
         ax.set_ylabel(rf"$u_h(x, {Y_LINE:g})$")
     axes[-1].set_xlabel(r"$x$")
-    plotting.legend_above(fig)
+    plotting.legend(axes[0])
     return fig
 
 

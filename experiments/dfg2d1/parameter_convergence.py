@@ -20,7 +20,7 @@ Usage::
 """
 
 import numpy as np
-from convergence import LABELS, N_Y_FIT, REFERENCE_SLOPES, set_h_ticks
+from convergence import ERROR_LABELS, N_Y_FIT, REFERENCE_SLOPES, set_h_ticks
 
 from cutfem import core, plotting, study
 from cutfem.problems import dfg2d1
@@ -87,17 +87,12 @@ def compute(args):
     return {"n_y": n_ys, "h": h, "gamma_N": args.gamma_n, "runs": runs}
 
 
-def style(run, gamma_p_colors):
-    """Line style: violet ramp for the gamma_p sweep, others categorical."""
+def style(run, color):
+    """Line style: solid for the gamma_p sweep, dashed for gamma_u, dotted baseline."""
     label = rf"$\gamma_u = {run['gamma_u']:g},\ \gamma_p = {run['gamma_p']:g}$"
-    if run["group"] == "gamma_p":
-        return {"color": gamma_p_colors[run["gamma_p"]], "marker": "o",
-                "label": label}
-    if run["group"] == "gamma_u":
-        color = plotting.CATEGORICAL[1 if run["gamma_u"] < 1 else 2]
-        return {"color": color, "marker": "s", "linestyle": "--", "label": label}
-    return {"color": plotting.NEUTRAL, "marker": "^", "linestyle": ":",
-            "label": "no ghost penalty"}
+    marker, linestyle = {"gamma_p": ("o", "-"), "gamma_u": ("s", "--"),
+                         "baseline": ("^", ":")}[run["group"]]
+    return {"color": color, "marker": marker, "linestyle": linestyle, "label": label}
 
 
 def find(data, gamma_u, gamma_p):
@@ -111,21 +106,20 @@ def plot_errors(data):
     fig, axes = plotting.figure(ncols=2, aspect=0.9)
     h = np.asarray(data["h"])
     fine = np.asarray(data["n_y"]) >= N_Y_FIT
-    sweep = [r["gamma_p"] for r in data["runs"] if r["group"] == "gamma_p"]
-    colors = dict(zip(sweep, plotting.ordered_colors(sweep), strict=True))
+    colors = plotting.ordered_colors(data["runs"])
     for ax, q in zip(axes, dfg2d1.QUANTITIES, strict=True):
-        for run in data["runs"]:
-            ax.loglog(h, run[f"err_{q}"], markersize=3.5, **style(run, colors))
+        for run, color in zip(data["runs"], colors, strict=True):
+            ax.loglog(h, run[f"err_{q}"], markersize=3.5, **style(run, color))
         values = np.asarray(find(data, 0.01, 0.01)[f"err_{q}"])
         plotting.slope_triangle(ax, h[fine], values[fine], REFERENCE_SLOPES[q])
         set_h_ticks(ax)
-        ax.set_ylabel(rf"relative error of {LABELS[q]}")
-    plotting.legend_above(fig, ax=axes[0], ncols=3)
+        ax.set_ylabel(ERROR_LABELS[q])
+    plotting.legend(axes[0], ncols=3)
     return fig
 
 
 def plot_conditioning(data):
-    """kappa(A) versus h on a broken y-axis: no ghost penalty above, gamma_u below.
+    """kappa(A) versus h on a broken y-axis: gamma_u = gamma_p = 0 above, gamma_u below.
 
     gamma_p does not change kappa (the gamma_p sweep curves coincide), so the
     ghost penalty curves vary gamma_u at gamma_p = 0.01.
@@ -144,7 +138,8 @@ def plot_conditioning(data):
               for i, (g_u, color) in enumerate(
                   zip(gamma_u, plotting.ordered_colors(gamma_u), strict=True))]
     baseline = find(data, 0.0, 0.0)["kappa"]
-    curves.append((baseline, plotting.NEUTRAL, "^", ":", "no ghost penalty"))
+    curves.append((baseline, plotting.CATEGORICAL[len(curves)], "^", ":",
+                   r"$\gamma_u = \gamma_p = 0$"))
     for ax in (ax_top, ax_bottom):
         for kappa, color, marker, linestyle, label in curves:
             ax.loglog(h, kappa, color=color, marker=marker, linestyle=linestyle,
@@ -157,9 +152,9 @@ def plot_conditioning(data):
     kappa = np.asarray(find(data, max(gamma_u), 0.01)["kappa"])
     plotting.slope_triangle(ax_bottom, h[fine], kappa[fine], -2)
     set_h_ticks(ax_bottom)
-    fig.supylabel(r"condition number $\kappa(A)$",
+    fig.supylabel(r"$\kappa(A)$",
                   fontsize=ax_bottom.yaxis.label.get_fontsize())
-    plotting.legend_above(fig, ax=ax_top, ncols=2)
+    plotting.legend(ax_bottom, ncols=2)
     return fig
 
 
