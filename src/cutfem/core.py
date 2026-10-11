@@ -18,6 +18,7 @@ from dataclasses import dataclass
 import basix.ufl
 import dolfinx.fem
 import dolfinx.fem.petsc
+import dolfinx.la
 import dolfinx.mesh
 import numpy as np
 import qugar.dolfinx
@@ -65,8 +66,11 @@ def disk_mesh(n_cells, xmin, xmax, center, radius, inside=True,
     if not inside:
         domain = qugar.impl.create_negative(domain)
 
+    # Ghost cells across rank boundaries, so that facet integrals (ghost
+    # penalty) also see the facets between ranks; qugar's default is none
     mesh = create_unfitted_impl_Cartesian_mesh(
-        comm, domain, n_cells, xmin, xmax, exclude_empty_cells=True, dtype=DTYPE)
+        comm, domain, n_cells, xmin, xmax, exclude_empty_cells=True,
+        ghost_mode=dolfinx.mesh.GhostMode.shared_facet, dtype=DTYPE)
     return mesh, h
 
 
@@ -79,8 +83,12 @@ def ghost_facets(mesh):
     starts = f2c.offsets[:-1]
     interior = np.flatnonzero(np.diff(f2c.offsets) == 2)
     cell_map = mesh.topology.index_map(tdim)
-    is_cut = np.zeros(cell_map.size_local + cell_map.num_ghosts, dtype=bool)
-    is_cut[mesh.get_cut_cells()] = True
+    # qugar lists only owned cut cells: send the flags to the ghost cells
+    flags = dolfinx.la.vector(cell_map, dtype=np.float64)
+    flags.array[:] = 0.0
+    flags.array[mesh.get_cut_cells()] = 1.0
+    flags.scatter_forward()
+    is_cut = flags.array > 0.5
 
     first = f2c.array[starts[interior]]
     second = f2c.array[starts[interior] + 1]
