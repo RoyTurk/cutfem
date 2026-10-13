@@ -18,9 +18,10 @@ figures/                figures (.pdf) for the thesis (git-ignored)
 data/                   external reference data (git-ignored)
 ```
 
-The DFG 2D-3 comparison reads the FEATFLOW drag/lift time series from
-`data/featflow/draglift_q2_cn_lv1-6_dt4/bdforces_lv6`, available from the
-[FEATFLOW 2D-3 benchmark page](https://wwwold.mathematik.tu-dortmund.de/~featflow/en/benchmarks/cfdbenchmarking/flow/dfg_benchmark3_re100.html).
+The Navier-Stokes machinery is being rebuilt. The previous version (DFG
+benchmarks, gyroid duct, preconditioner study) with its results, figures and
+FEATFLOW data is kept locally in `numerical_experiments/navier_stokes_2026-10-13/`
+(git-ignored); run it with `PYTHONPATH=numerical_experiments/navier_stokes_2026-10-13/src`.
 
 ## Setup
 
