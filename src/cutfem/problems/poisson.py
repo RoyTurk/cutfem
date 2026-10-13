@@ -45,11 +45,12 @@ def exact_solution(x):
     return ufl.sin(np.pi * x[0]) * ufl.sin(np.pi * x[1])
 
 
-def build(p: Params) -> System:
+def build(params: Params) -> System:
     """Assemble the Poisson CutFEM system."""
-    mesh, h = core.disk_mesh(p.n_cells, p.xmin, p.xmax, p.center, p.radius)
+    mesh, h = core.disk_mesh(params.n_cells, params.xmin, params.xmax,
+                             params.center, params.radius)
     m = core.cut_measures(mesh)
-    V = core.lagrange_space(mesh, p.degree)
+    V = core.lagrange_space(mesh, params.degree)
     u, v = ufl.TrialFunction(V), ufl.TestFunction(V)
 
     u_ex = exact_solution(ufl.SpatialCoordinate(mesh))
@@ -58,16 +59,16 @@ def build(p: Params) -> System:
     dv_n = ufl.dot(ufl.grad(v), m.n)
 
     a = (ufl.inner(ufl.grad(u), ufl.grad(v)) * m.dx
-         - du_n * v * m.ds - u * dv_n * m.ds + (p.beta / h) * u * v * m.ds)
+         - du_n * v * m.ds - u * dv_n * m.ds + (params.beta / h) * u * v * m.ds)
     L = (f * v * m.dx
-         + (p.beta / h) * u_ex * v * m.ds - u_ex * dv_n * m.ds)
+         + (params.beta / h) * u_ex * v * m.ds - u_ex * dv_n * m.ds)
 
     A = core.assemble_matrix(a)
-    if p.tau != 0.0:
-        core.add_matrix(A, p.tau * core.ghost_penalty(u, v, m, h, order=1))
+    if params.tau != 0.0:
+        core.add_matrix(A, params.tau * core.ghost_penalty(u, v, m, h, order=1))
     b = core.assemble_vector(L)
 
-    return System(mesh=mesh, h=h, A=A, b=b, params=p, V=V, dx=m.dx,
+    return System(mesh=mesh, h=h, A=A, b=b, params=params, V=V, dx=m.dx,
                   u_exact=u_ex)
 
 
@@ -86,9 +87,9 @@ def errors(s: System, uh) -> dict:
     return {"L2_u": core.l2_norm(e, s.dx), "H1_u": core.h1_seminorm(e, s.dx)}
 
 
-def expected_rates(p: Params) -> dict:
+def expected_rates(params: Params) -> dict:
     """Optimal convergence orders for Lagrange elements of degree k."""
-    return {"L2_u": p.degree + 1, "H1_u": p.degree}
+    return {"L2_u": params.degree + 1, "H1_u": params.degree}
 
 
 def save_vtk(path, s: System, uh) -> None:

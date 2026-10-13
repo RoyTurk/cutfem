@@ -109,8 +109,8 @@ def sweep(problem, params, vary, values, extras=None):
     """
     rows, table = [], None
     for value in values:
-        p = dataclasses.replace(params, **{vary: value})
-        with problem.build(p) as system:
+        varied = dataclasses.replace(params, **{vary: value})
+        with problem.build(varied) as system:
             row = {vary: value, "h": system.h, "n_dofs": system.n_dofs}
             if extras is not None:
                 row.update(extras(system))

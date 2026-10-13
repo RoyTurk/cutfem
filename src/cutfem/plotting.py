@@ -151,9 +151,9 @@ def _densify(points, step=1.0):
     if len(points) < 2:
         return points
     pieces = [points[:1]]
-    for p, q in zip(points[:-1], points[1:], strict=True):
-        n = max(int(np.ceil(np.linalg.norm(q - p) / step)), 1)
-        pieces.append(p + np.linspace(0.0, 1.0, n + 1)[1:, None] * (q - p))
+    for a, b in zip(points[:-1], points[1:], strict=True):
+        n = max(int(np.ceil(np.linalg.norm(b - a) / step)), 1)
+        pieces.append(a + np.linspace(0.0, 1.0, n + 1)[1:, None] * (b - a))
     return np.vstack(pieces)
 
 

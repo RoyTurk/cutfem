@@ -48,18 +48,18 @@ class System(core.System):
     V: object
 
 
-def build(p: Params) -> System:
+def build(params: Params) -> System:
     """Assemble the advection-diffusion CutFEM system."""
-    mesh, h = core.disk_mesh(p.n_cells, p.xmin, p.xmax, p.center, p.radius,
-                             inside=False)
+    mesh, h = core.disk_mesh(params.n_cells, params.xmin, params.xmax,
+                             params.center, params.radius, inside=False)
     m = core.cut_measures(mesh)
-    V = core.lagrange_space(mesh, p.degree)
+    V = core.lagrange_space(mesh, params.degree)
     u, v = ufl.TrialFunction(V), ufl.TestFunction(V)
 
-    mu, n = p.mu, m.n
-    beta_norm = float(np.linalg.norm(p.beta))
-    beta = dolfinx.fem.Constant(mesh, np.asarray(p.beta, dtype=core.DTYPE))
-    g = dolfinx.fem.Constant(mesh, core.DTYPE(p.g))
+    mu, n = params.mu, m.n
+    beta_norm = float(np.linalg.norm(params.beta))
+    beta = dolfinx.fem.Constant(mesh, np.asarray(params.beta, dtype=core.DTYPE))
+    g = dolfinx.fem.Constant(mesh, core.DTYPE(params.g))
     f = dolfinx.fem.Constant(mesh, core.DTYPE(0.0))
     beta_n = ufl.dot(beta, n)
     inflow = 0.5 * (beta_n - abs(beta_n))
@@ -67,21 +67,22 @@ def build(p: Params) -> System:
     a = (mu * ufl.inner(ufl.grad(u), ufl.grad(v)) * m.dx
          - mu * ufl.inner(ufl.grad(u), n) * v * m.ds
          - mu * ufl.inner(ufl.grad(v), n) * u * m.ds
-         + (p.gamma * mu / h) * u * v * m.ds
+         + (params.gamma * mu / h) * u * v * m.ds
          + ufl.dot(beta, ufl.grad(u)) * v * m.dx
          - inflow * u * v * m.ds)
     L = (f * v * m.dx
          - mu * g * ufl.inner(ufl.grad(v), n) * m.ds
-         + (p.gamma * mu / h) * g * v * m.ds
+         + (params.gamma * mu / h) * g * v * m.ds
          - inflow * g * v * m.ds)
 
     # CIP on all interior facets, ghost penalty on the cut facets
     phi = beta_norm ** 2 * h ** 2 / (mu + beta_norm * h)
     jumps = ufl.inner(core.normal_jump(u, m.n_F), core.normal_jump(v, m.n_F))
-    stab = (p.gamma_beta * phi * h * jumps * m.dS
-            + (p.gamma_mu * mu + p.gamma_beta * phi) * h * jumps * m.dS_ghost)
+    stab = (params.gamma_beta * phi * h * jumps * m.dS
+            + (params.gamma_mu * mu + params.gamma_beta * phi) * h * jumps * m.dS_ghost)
 
-    bcs = [dolfinx.fem.dirichletbc(core.DTYPE(0.0), _box_boundary_dofs(mesh, V, p), V)]
+    box_dofs = _box_boundary_dofs(mesh, V, params)
+    bcs = [dolfinx.fem.dirichletbc(core.DTYPE(0.0), box_dofs, V)]
     a_form = core.compile_form(a)
     stab_form = core.compile_form(stab, cut=False)
     L_form = core.compile_form(L)
@@ -96,13 +97,13 @@ def build(p: Params) -> System:
     b.ghostUpdate(addv=PETSc.InsertMode.ADD, mode=PETSc.ScatterMode.REVERSE)
     dolfinx.fem.petsc.set_bc(b, bcs)
 
-    return System(mesh=mesh, h=h, A=A, b=b, params=p, V=V)
+    return System(mesh=mesh, h=h, A=A, b=b, params=params, V=V)
 
 
-def _box_boundary_dofs(mesh, V, p: Params):
+def _box_boundary_dofs(mesh, V, params: Params):
     """DoFs on the boundary of the background box."""
     fdim = mesh.topology.dim - 1
-    xmin, xmax = p.xmin, p.xmax
+    xmin, xmax = params.xmin, params.xmax
     facets = dolfinx.mesh.locate_entities_boundary(
         mesh, fdim,
         lambda x: (np.isclose(x[0], xmin[0]) | np.isclose(x[0], xmax[0])
@@ -124,20 +125,20 @@ def errors(s: System, uh) -> dict:
     return {}
 
 
-def expected_rates(p: Params) -> dict:
+def expected_rates(params: Params) -> dict:
     """No exact solution: no expected orders."""
     return {}
 
 
-def peclet_h(p: Params, h: float) -> float:
+def peclet_h(params: Params, h: float) -> float:
     """Grid Peclet number |beta| h / (2 mu)."""
-    return float(np.linalg.norm(p.beta)) * h / (2.0 * p.mu)
+    return float(np.linalg.norm(params.beta)) * h / (2.0 * params.mu)
 
 
-def disk_chord(p: Params, y: float):
+def disk_chord(params: Params, y: float):
     """Interval (x0, x1) of the line at height y inside the disk, or None."""
-    half = np.sqrt(max(p.radius ** 2 - (y - p.center[1]) ** 2, 0.0))
-    return (p.center[0] - half, p.center[0] + half) if half > 0 else None
+    half = np.sqrt(max(params.radius ** 2 - (y - params.center[1]) ** 2, 0.0))
+    return (params.center[0] - half, params.center[0] + half) if half > 0 else None
 
 
 def sample_line(s: System, uh, x, y):

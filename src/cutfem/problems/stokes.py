@@ -59,45 +59,46 @@ def exact_pressure(x):
     return 60 * x[0] ** 2 * x[1] - 20 * x[1] ** 3
 
 
-def build(p: Params) -> System:
+def build(params: Params) -> System:
     """Assemble the Stokes CutFEM system (blocks and monolithic matrix)."""
-    mesh, h = core.disk_mesh(p.n_cells, p.xmin, p.xmax, p.center, p.radius)
+    mesh, h = core.disk_mesh(params.n_cells, params.xmin, params.xmax,
+                             params.center, params.radius)
     m = core.cut_measures(mesh)
-    V = core.lagrange_space(mesh, p.v_degree, shape=(2,))
-    Q = core.lagrange_space(mesh, p.p_degree)
+    V = core.lagrange_space(mesh, params.v_degree, shape=(2,))
+    Q = core.lagrange_space(mesh, params.p_degree)
     u, v = ufl.TrialFunction(V), ufl.TestFunction(V)
-    pr, q = ufl.TrialFunction(Q), ufl.TestFunction(Q)
+    p, q = ufl.TrialFunction(Q), ufl.TestFunction(Q)
 
     x = ufl.SpatialCoordinate(mesh)
     g = exact_velocity(x)
-    f = -p.mu * ufl.div(ufl.grad(g)) + ufl.grad(exact_pressure(x))
-    mu, n = p.mu, m.n
+    f = -params.mu * ufl.div(ufl.grad(g)) + ufl.grad(exact_pressure(x))
+    mu, n = params.mu, m.n
     zero = dolfinx.fem.Constant(mesh, core.DTYPE(0.0))
 
     # Velocity block: viscous term with Nitsche, ghost penalty up to order k
     a_uu = (mu * ufl.inner(ufl.grad(u), ufl.grad(v)) * m.dx
             - mu * ufl.inner(ufl.dot(ufl.grad(u), n), v) * m.ds
             - mu * ufl.inner(u, ufl.dot(ufl.grad(v), n)) * m.ds
-            + (p.gamma_mu * mu / h) * ufl.inner(u, v) * m.ds)
+            + (params.gamma_mu * mu / h) * ufl.inner(u, v) * m.ds)
     A_uu = core.assemble_matrix(a_uu)
-    if p.gamma_g != 0.0:
-        core.add_matrix(A_uu, p.gamma_g * mu
-                        * core.ghost_penalty(u, v, m, h, order=p.v_degree))
+    if params.gamma_g != 0.0:
+        core.add_matrix(A_uu, params.gamma_g * mu
+                        * core.ghost_penalty(u, v, m, h, order=params.v_degree))
 
     # Coupling blocks
-    A_up = core.assemble_matrix(-pr * ufl.div(v) * m.dx
-                                + pr * ufl.dot(v, n) * m.ds)
+    A_up = core.assemble_matrix(-p * ufl.div(v) * m.dx
+                                + p * ufl.dot(v, n) * m.ds)
     A_pu = core.assemble_matrix(ufl.div(u) * q * m.dx
                                 - q * ufl.dot(u, n) * m.ds)
 
     # Pressure block: ghost penalty (h^(2j+1) scaling) and global CIP
-    A_pp = core.assemble_matrix(zero * pr * q * m.dx)
-    if p.gamma_g != 0.0:
-        core.add_matrix(A_pp, (p.gamma_g / mu) * h ** 2
-                        * core.ghost_penalty(pr, q, m, h, order=p.p_degree))
-    if p.gamma_p != 0.0:
-        jumps = ufl.inner(core.normal_jump(pr, m.n_F), core.normal_jump(q, m.n_F))
-        core.add_matrix(A_pp, (p.gamma_p * h ** 3 / mu) * jumps * m.dS)
+    A_pp = core.assemble_matrix(zero * p * q * m.dx)
+    if params.gamma_g != 0.0:
+        core.add_matrix(A_pp, (params.gamma_g / mu) * h ** 2
+                        * core.ghost_penalty(p, q, m, h, order=params.p_degree))
+    if params.gamma_p != 0.0:
+        jumps = ufl.inner(core.normal_jump(p, m.n_F), core.normal_jump(q, m.n_F))
+        core.add_matrix(A_pp, (params.gamma_p * h ** 3 / mu) * jumps * m.dS)
 
     nest = PETSc.Mat().createNest([[A_uu, A_up], [A_pu, A_pp]])
     nest.assemble()
@@ -110,7 +111,7 @@ def build(p: Params) -> System:
     b_u = core.assemble_vector(
         ufl.inner(f, v) * m.dx
         - mu * ufl.inner(g, ufl.dot(ufl.grad(v), n)) * m.ds
-        + (p.gamma_mu * mu / h) * ufl.inner(g, v) * m.ds)
+        + (params.gamma_mu * mu / h) * ufl.inner(g, v) * m.ds)
     b_p = core.assemble_vector(zero * q * m.dx - q * ufl.dot(g, n) * m.ds)
     b = A.createVecRight()
     n_u = b_u.getLocalSize()
@@ -119,7 +120,7 @@ def build(p: Params) -> System:
     b_u.destroy()
     b_p.destroy()
 
-    return System(mesh=mesh, h=h, A=A, b=b, params=p, V=V, Q=Q, measures=m,
+    return System(mesh=mesh, h=h, A=A, b=b, params=params, V=V, Q=Q, measures=m,
                   A_uu=A_uu, A_up=A_up, A_pu=A_pu, A_pp=A_pp)
 
 
@@ -190,10 +191,10 @@ def errors(s: System, solution) -> dict:
             "div_u": core.l2_norm(ufl.div(uh), dx)}
 
 
-def expected_rates(p: Params) -> dict:
+def expected_rates(params: Params) -> dict:
     """Optimal orders for degrees (k, l) = (v_degree, p_degree)."""
-    return {"L2_u": p.v_degree + 1, "H1_u": p.v_degree,
-            "L2_p": p.p_degree + 1, "div_u": p.v_degree}
+    return {"L2_u": params.v_degree + 1, "H1_u": params.v_degree,
+            "L2_p": params.p_degree + 1, "div_u": params.v_degree}
 
 
 def inf_sup(s: System, max_dense=1e8, zero_tol=1e-10) -> dict:
@@ -228,11 +229,11 @@ def inf_sup(s: System, max_dense=1e8, zero_tol=1e-10) -> dict:
 
     mu, h, m = s.params.mu, s.h, s.measures
     u, v = ufl.TrialFunction(s.V), ufl.TestFunction(s.V)
-    pr, q = ufl.TrialFunction(s.Q), ufl.TestFunction(s.Q)
+    p, q = ufl.TrialFunction(s.Q), ufl.TestFunction(s.Q)
     N_V = core.assemble_matrix(mu * ufl.inner(ufl.grad(u), ufl.grad(v)) * m.dx,
                                cut=False)
     core.add_matrix(N_V, (mu / h) * ufl.inner(u, v) * m.ds, cut=True)
-    M_T = core.assemble_matrix((1.0 / mu) * pr * q * m.dx, cut=False)
+    M_T = core.assemble_matrix((1.0 / mu) * p * q * m.dx, cut=False)
 
     skew = spla.norm(core.to_scipy(s.A_pu) + B) / spla.norm(B)
     X = spla.splu(core.to_scipy(N_V).tocsc()).solve(B.T.toarray())
