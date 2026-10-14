@@ -83,6 +83,7 @@ class System(core.System):
     G: PETSc.Mat                # ghost penalty matrix, zero on constrained rows/cols
     x: PETSc.Vec                # blocked [u, p] state vector
     history: list = field(default_factory=list)   # residual norms of the last solve
+    P: PETSc.Mat = None         # periodic prolongation (full <- reduced), None if not periodic
 
 
 def phi(nu, U, h):
@@ -128,14 +129,19 @@ def boundary_facets(mesh, marker):
     return dolfinx.mesh.locate_entities_boundary(mesh, fdim, marker)
 
 
-def _pressure_pin(Q):
-    """BC fixing one pressure dof of a full cell (all ranks sharing it list it)."""
+def _pressure_pin(Q, exclude=None):
+    """BC fixing one pressure dof of a full cell (all ranks sharing it list it).
+
+    ``exclude(point)`` rejects dofs by position (e.g. on periodic faces).
+    """
     comm = Q.mesh.comm
     index_map = Q.dofmap.index_map
     n_owned = index_map.size_local
+    coords = Q.tabulate_dof_coordinates()
     dof = None
     for cell in Q.mesh.get_full_cells():
-        owned = [d for d in Q.dofmap.cell_dofs(cell) if d < n_owned]
+        owned = [d for d in Q.dofmap.cell_dofs(cell) if d < n_owned
+                 and (exclude is None or not exclude(coords[d]))]
         if owned:
             dof = owned[0]
             break
@@ -150,7 +156,7 @@ def _pressure_pin(Q):
 
 
 def build(params: Params, mesh, h, *, f=None, g=None, strong=(), slip=(),
-          neumann=(), neumann_cut=False):
+          neumann=(), neumann_cut=False, periodic=None):
     """Compile the forms and allocate the Newton system.
 
     Parameters
@@ -181,6 +187,11 @@ def build(params: Params, mesh, h, *, f=None, g=None, strong=(), slip=(),
         Gamma, e.g. a gyroid inlet), instead of standard quadrature (facets
         entirely in the fluid, e.g. the DFG outlet). ``g_N`` is then a
         Constant or a Function, never a coordinate expression.
+    periodic : (xmin, xmax, directions), optional
+        Periodic box faces (serial only, see :func:`periodic_map`): u and p
+        on the face ``x_d = xmax_d`` equal those on ``x_d = xmin_d`` for
+        every d in ``directions``. Not combined with strong BCs on those
+        faces. The pressure pin is then placed off the periodic faces.
     """
     # One quadrature degree for every cut integral: with the default
     # per-integrand degrees, the residual (degree of c(u, u, v)) and the
@@ -280,7 +291,14 @@ def build(params: Params, mesh, h, *, f=None, g=None, strong=(), slip=(),
     bcs += [slip_bc(V, facets, component) for facets, component in slip]
     pinned = len(neumann) == 0
     if pinned:
-        bcs.append(_pressure_pin(Q))
+        exclude = None
+        if periodic is not None:
+            lo, hi, directions = periodic
+
+            def exclude(point):
+                return any(np.isclose(point[d], lo[d]) or np.isclose(point[d], hi[d])
+                           for d in directions)
+        bcs.append(_pressure_pin(Q, exclude))
 
     # The cut forms are assembled into J (their own pattern); A = J + G has
     # the union pattern. Assembling into A directly is not possible: an axpy
@@ -297,9 +315,57 @@ def build(params: Params, mesh, h, *, f=None, g=None, strong=(), slip=(),
     b = dolfinx.fem.petsc.create_vector([V, Q], kind=PETSc.Vec.Type.MPI)
     x = dolfinx.fem.petsc.create_vector([V, Q], kind=PETSc.Vec.Type.MPI)
 
+    P = periodic_map(V, Q, *periodic) if periodic is not None else None
     return System(mesh=mesh, h=h, A=A, b=b, params=params, V=V, Q=Q, measures=m,
                   uh=uh, ph=ph, phi_u=phi_u, g=g, f=f, bcs=bcs, pinned=pinned,
-                  forms=forms, J=J, G=G, x=x)
+                  forms=forms, J=J, G=G, x=x, P=P)
+
+
+def periodic_map(V, Q, xmin, xmax, directions):
+    """Prolongation P from periodic (reduced) to full [u, p] vectors (serial).
+
+    Nodes at the same point of the periodic box (coordinates ``xmax_d``
+    folded to ``xmin_d`` for d in ``directions``) are one unknown. ``P`` has
+    one unit entry per row, the column of the node's group, so ``x = P x_r``
+    is periodic and ``P^T J P``, ``P^T R`` are the periodic Jacobian and
+    residual: summing the equations of a group makes the box-face terms
+    cancel.
+
+    A node may have no image: empty cells are excluded, and the cell across
+    the periodic face can be empty while its neighbour is active (fluid in
+    the cell, not at that face). It is then an unknown of its own, as on the
+    periodic domain. The geometry must be periodic over the box; this is
+    not checked.
+    """
+    from scipy.spatial import cKDTree
+
+    if V.mesh.comm.size > 1:
+        raise NotImplementedError("periodic_map is serial only")
+    xmin, xmax = np.asarray(xmin, dtype=float), np.asarray(xmax, dtype=float)
+    tol = 1e-8 * float(np.max(xmax - xmin))
+
+    columns, offset_r = [], 0
+    for S in (V, Q):
+        bs = S.dofmap.index_map_bs
+        coords = S.tabulate_dof_coordinates()[:S.dofmap.index_map.size_local]
+        folded = coords.copy()
+        for d in directions:
+            folded[np.abs(coords[:, d] - xmax[d]) < tol, d] = xmin[d]
+        groups = cKDTree(folded).query_ball_point(folded, tol)
+        representative = np.array([min(group) for group in groups])
+        is_master = representative == np.arange(len(coords))
+        index = np.cumsum(is_master) - 1                    # reduced node of a master
+        node_r = offset_r + bs * index[representative]
+        columns.append((node_r[:, None] + np.arange(bs)).ravel())
+        offset_r += bs * int(is_master.sum())
+
+    columns = np.concatenate(columns).astype(PETSc.IntType)
+    n = len(columns)
+    P = PETSc.Mat().createAIJ(
+        size=(n, offset_r), comm=V.mesh.comm,
+        csr=(np.arange(n + 1, dtype=PETSc.IntType), columns, np.ones(n)))
+    P.assemble()
+    return P
 
 
 def data_function(expr, mesh, degree, name):
@@ -372,7 +438,9 @@ def solve(s: System, verbose=False):
     Starts from the current ``s.uh, s.ph`` (zero after :func:`build`, so the
     first step is a Stokes solve). Stops when
     ``||R_k|| <= max(atol, rtol ||R_0||)``; raises RuntimeError otherwise.
-    The residual norms are stored in ``s.history``.
+    The residual norms are stored in ``s.history``. With ``s.P``, the
+    periodic system ``P^T J P delta_r = -P^T R`` is solved (residual norms
+    are those of ``P^T R``).
     """
     params = s.params
     ksp = PETSc.KSP().create(s.mesh.comm)
@@ -382,11 +450,18 @@ def solve(s: System, verbose=False):
     delta = s.A.createVecRight()
     du = dolfinx.fem.Function(s.V)
     dp = dolfinx.fem.Function(s.Q)
+    P = s.P
+    if P is not None:
+        b_r, delta_r, A_r = P.createVecRight(), P.createVecRight(), None
+    rhs, solution = (s.b, delta) if P is None else (b_r, delta_r)
 
     s.history = []
     try:
         for k in range(params.max_iter + 1):
             norm = assemble_residual(s)
+            if P is not None:
+                P.multTranspose(s.b, b_r)
+                norm = b_r.norm()
             s.history.append(norm)
             if verbose and s.mesh.comm.rank == 0:
                 kind = "Picard" if k < params.n_picard else "Newton"
@@ -398,18 +473,23 @@ def solve(s: System, verbose=False):
                                    f"iterations (||R|| = {norm:.3e})")
 
             assemble_jacobian(s, picard=k < params.n_picard)
-            s.b.scale(-1.0)
-            ksp.setOperators(s.A)
-            ksp.solve(s.b, delta)
+            if P is not None:
+                A_r = s.A.PtAP(P, result=A_r)
+            rhs.scale(-1.0)
+            ksp.setOperators(s.A if P is None else A_r)
+            ksp.solve(rhs, solution)
             if ksp.getConvergedReason() < 0:
                 raise RuntimeError(f"linear solve failed at iteration {k} "
                                    f"(KSP reason {ksp.getConvergedReason()})")
+            if P is not None:
+                P.mult(delta_r, delta)
             core.split_solution(delta, du, dp)
             s.uh.x.array[:] += params.damping * du.x.array
             s.ph.x.array[:] += params.damping * dp.x.array
     finally:
-        for obj in (ksp, delta):
-            obj.destroy()
+        for obj in (ksp, delta) if P is None else (ksp, delta, b_r, delta_r, A_r):
+            if obj is not None:
+                obj.destroy()
 
     if s.pinned:
         area = core.integrate(dolfinx.fem.Constant(s.mesh, core.DTYPE(1.0))
@@ -549,6 +629,8 @@ def condition_number(s: System, tol=1e-8):
     well separated). Call after :func:`solve`, so that ``s.A`` is the
     Jacobian at the solution. Returns ``(kappa, sigma_max, sigma_min)``.
     """
+    if s.P is not None:
+        raise NotImplementedError("condition_number of a periodic system")
     rows = PETSc.IS().createGeneral(free_dofs(s), comm=s.mesh.comm)
     A = s.A.createSubMatrix(rows, rows)
     ksp = PETSc.KSP().create(s.mesh.comm)
